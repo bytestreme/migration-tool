@@ -27,43 +27,50 @@ public class WorkerImpl implements Worker {
         this.fileNames = fileNames;
     }
 
-    private boolean work(String fileName) {
+    private int work(String fileName) throws IOException {
 
-        try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
 
-            HttpGet oldStorageRequest = new HttpGet(URL_OLD_STORAGE + fileName);
+        HttpGet oldStorageRequest = new HttpGet(URL_OLD_STORAGE + fileName);
 
-            CloseableHttpResponse oldStorageResponse = httpClient.execute(oldStorageRequest);
+        CloseableHttpResponse oldStorageResponse = httpClient.execute(oldStorageRequest);
 
-            HttpPost newStorageRequest = new HttpPost(URL_NEW_STORAGE);
+        HttpPost newStorageRequest = new HttpPost(URL_NEW_STORAGE);
 
-            HttpEntity newStoragePayload = MultipartEntityBuilder
-                    .create()
-                    .addBinaryBody(FORM_DATA_FIELD, oldStorageResponse.getEntity().getContent(),
-                            ContentType.MULTIPART_FORM_DATA, fileName)
-                    .build();
-            newStorageRequest.setEntity(newStoragePayload);
+        HttpEntity newStoragePayload = MultipartEntityBuilder
+                .create()
+                .addBinaryBody(FORM_DATA_FIELD, oldStorageResponse.getEntity().getContent(),
+                        ContentType.MULTIPART_FORM_DATA, fileName)
+                .build();
+        newStorageRequest.setEntity(newStoragePayload);
 
-            CloseableHttpResponse newStorageResponse = httpClient.execute(newStorageRequest);
+        CloseableHttpResponse newStorageResponse = httpClient.execute(newStorageRequest);
 
-            return newStorageResponse.getStatusLine().getStatusCode() == 200;
+        return newStorageResponse.getStatusLine().getStatusCode();
 
-        } catch (IOException e) {
-            logger.error(e);
-            return false;
-        }
     }
 
     @Override
     public void run() {
         while (!fileNames.isEmpty()) {
             String current = fileNames.poll();
-            boolean success = work(current);
-            if (!success) {
-                fileNames.offer(current);
-                logger.error("Failed to transmit: " + current + ". Trying again later...");
-            } else {
-                logger.info("Finished: " + current);
+            int code;
+            try {
+                code = work(current);
+            } catch (IOException e) {
+                code = -1;
+                logger.error(e);
+            }
+            switch (code) {
+                case 200:
+                    logger.info("Finished: " + current);
+                    break;
+                case 409:
+                    logger.info("Attempt to load existing file. Skipping " + current);
+                    break;
+                default:
+                    fileNames.offer(current);
+                    logger.error("Failed to transmit: " + current + ". Trying again later...");
             }
         }
     }
