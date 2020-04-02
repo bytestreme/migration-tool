@@ -1,5 +1,6 @@
-package com.bytestreme.migrator;
+package com.bytestreme.migrator.service.impl;
 
+import com.bytestreme.migrator.service.Worker;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -11,28 +12,30 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Queue;
 
-import static com.bytestreme.migrator.Application.BASE_URL;
+import static com.bytestreme.migrator.Constants.*;
 
 
-public class Worker {
+public class WorkerImpl implements Worker {
 
-    private final static String UPLOAD_BASE_URL = BASE_URL + "newStorage/files";
-    private final static String DOWNLOAD_BASE_URL = BASE_URL + "oldStorage/files/";
+    private final static Logger logger = Logger.getLogger(WorkerImpl.class);
 
-    private final static String FORM_DATA_FIELD = "file";
+    private Queue<String> fileNames;
 
-    private final static Logger logger = Logger.getLogger(Worker.class);
+    public WorkerImpl(Queue<String> fileNames) {
+        this.fileNames = fileNames;
+    }
 
-    public static void work(String fileName) {
+    private boolean work(String fileName) {
 
         try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
 
-            HttpGet oldStorageRequest = new HttpGet(DOWNLOAD_BASE_URL + fileName);
+            HttpGet oldStorageRequest = new HttpGet(URL_OLD_STORAGE + fileName);
 
             CloseableHttpResponse oldStorageResponse = httpClient.execute(oldStorageRequest);
 
-            HttpPost newStorageRequest = new HttpPost(UPLOAD_BASE_URL);
+            HttpPost newStorageRequest = new HttpPost(URL_NEW_STORAGE);
 
             HttpEntity newStoragePayload = MultipartEntityBuilder
                     .create()
@@ -43,12 +46,26 @@ public class Worker {
 
             CloseableHttpResponse newStorageResponse = httpClient.execute(newStorageRequest);
 
-            logger.info(fileName + " => " + (newStorageResponse.getStatusLine().getStatusCode() == 200 ? "SUCCESS" : "FAILED"));
+            return newStorageResponse.getStatusLine().getStatusCode() == 200;
 
         } catch (IOException e) {
             logger.error(e);
+            return false;
         }
+    }
 
+    @Override
+    public void run() {
+        while (!fileNames.isEmpty()) {
+            String current = fileNames.poll();
+            boolean success = work(current);
+            if (!success) {
+                fileNames.offer(current);
+                logger.error("Failed to transmit: " + current + ". Trying again later...");
+            } else {
+                logger.info("Finished: " + current);
+            }
+        }
     }
 
 }
