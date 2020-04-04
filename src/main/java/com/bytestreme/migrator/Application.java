@@ -10,6 +10,13 @@ public class Application {
     private final static Logger logger = Logger.getLogger(Application.class);
 
     public static void main(String[] args) {
+        new CoordinatorImpl(getNumberOfWorkers(args))
+                .init()
+                .migrate();
+
+    }
+
+    private static int getNumberOfWorkers(String[] args) {
         int number = DEFAULT_WORKERS_NUM;
 
         if (args.length == 0) {
@@ -22,12 +29,6 @@ public class Application {
                 logger.warn("Invalid argument for workers number provided. Using default value (" + DEFAULT_WORKERS_NUM + ")");
             }
         }
-
-        new CoordinatorImpl(number)
-                .init()
-                .migrate();
-
+        return number;
     }
-
-
 }
