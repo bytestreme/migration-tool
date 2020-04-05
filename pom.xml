@@ -7,8 +7,11 @@
     <groupId>com.bytestreme</groupId>
     <artifactId>migrator</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <apache.http.version>4.5.12</apache.http.version>
     </properties>
 
