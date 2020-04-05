@@ -30,14 +30,15 @@ public class Transmitter implements Worker {
     }
 
     /**
-     * @param fileName name of file to download from old storage and upload to new storage
-     * @return status code
+     * @param fileName being processed
+     * @return status code of file upload
      * @throws IOException in case of network or other IO errors
      */
     private int transmitFile(String fileName) throws IOException {
         CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpGet oldStorageRequest = new HttpGet(URL_OLD_STORAGE + fileName);
-        CloseableHttpResponse oldStorageResponse = httpClient.execute(oldStorageRequest);
+
+        CloseableHttpResponse oldStorageResponse = performOldFileRequest(httpClient, URL_OLD_STORAGE + fileName);
+
         HttpPost newStorageRequest = new HttpPost(URL_NEW_STORAGE);
         HttpEntity newStoragePayload = MultipartEntityBuilder
                 .create()
@@ -47,6 +48,17 @@ public class Transmitter implements Worker {
         newStorageRequest.setEntity(newStoragePayload);
         CloseableHttpResponse newStorageResponse = httpClient.execute(newStorageRequest);
         return newStorageResponse.getStatusLine().getStatusCode();
+    }
+
+    /**
+     * @param client being executing request
+     * @param url full path of file to download
+     * @return response being processed for file upload
+     * @throws IOException in case of network or other IO errors
+     */
+    private CloseableHttpResponse performOldFileRequest(CloseableHttpClient client, String url) throws IOException {
+        HttpGet oldStorageRequest = new HttpGet(url);
+        return client.execute(oldStorageRequest);
     }
 
     /**

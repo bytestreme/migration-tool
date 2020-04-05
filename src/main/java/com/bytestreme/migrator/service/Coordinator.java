@@ -9,7 +9,6 @@ public interface Coordinator {
     void migrate();
 
     /**
-     *
      * @return configured object with initialized files list
      */
     Coordinator init();
