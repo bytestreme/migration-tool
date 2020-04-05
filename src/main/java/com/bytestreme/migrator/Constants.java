@@ -10,5 +10,4 @@ public class Constants {
     public final static Long RETRY_COOLDOWN_MILLIS = 5000L;
 
     public final static int DEFAULT_WORKERS_NUM = 10;
-
 }

@@ -1,6 +1,8 @@
 package com.bytestreme.migrator.service.impl;
 
 import com.bytestreme.migrator.service.Coordinator;
+import com.bytestreme.migrator.struct.MigrationConfig;
+import com.bytestreme.migrator.struct.WorkerMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -10,35 +12,36 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
+import java.util.concurrent.LinkedBlockingQueue;
 
-import static com.bytestreme.migrator.Constants.*;
+import static com.bytestreme.migrator.Constants.RETRY_COOLDOWN_MILLIS;
+import static com.bytestreme.migrator.Constants.URL_OLD_STORAGE;
 
 public class CoordinatorImpl implements Coordinator {
 
     private final static Logger logger = Logger.getLogger(CoordinatorImpl.class);
 
-    private final int workersNumber;
     private boolean initDone = false;
-    private Queue<String> files;
-    private Queue<String> backupList;
+    private Queue<String> transmitFileList;
+    private Queue<String> deleteFileList;
+    private final MigrationConfig config;
 
-    public CoordinatorImpl(int workersNumber) {
-        if (workersNumber < 1) throw new IllegalArgumentException("There should be at least one worker!");
-        this.workersNumber = workersNumber;
+    public CoordinatorImpl(MigrationConfig config) {
+        this.config = config;
+        if (config.getWorkersNumber() < 1) throw new IllegalArgumentException("There should be at least one worker!");
     }
 
-    private void invokeThreads(Queue<String> fileList) {
-        final ExecutorService executorService = Executors.newFixedThreadPool(workersNumber);
+    private void invokeThreads(Queue<String> fileList, WorkerMode mode) {
+        final ExecutorService executorService = Executors.newFixedThreadPool(config.getWorkersNumber());
 
-        for (int i = 0; i < workersNumber; i++) {
-            executorService.submit(new WorkerImpl(fileList));
+        for (int i = 0; i < config.getWorkersNumber(); i++) {
+            executorService.submit(mode == WorkerMode.TRANSMIT
+                    ? new Transmitter(fileList)
+                    : new Cleaner(fileList));
         }
         executorService.shutdown();
         while (!executorService.isTerminated()) ;
@@ -47,31 +50,22 @@ public class CoordinatorImpl implements Coordinator {
     @Override
     public void migrate() {
         if (!initDone) throw new IllegalStateException("Cannot migrate before init is complete!");
-        invokeThreads(files);
-        logger.info("Finished main task.");
-        while (true) {
-            logger.info("Now, checking whether all files transmitted.");
-            logger.info("Getting all transmitted files list.");
-            Queue<String> transmitted = fetchUntilSucceed(URL_NEW_STORAGE);
-            logger.info("Now, processing files to check by names.");
-            Queue<String> absentFiles = backupList.parallelStream()
-                    .filter(x -> !transmitted.contains(x))
-                    .collect(Collectors.toCollection(ConcurrentLinkedQueue::new));
-            if (absentFiles.isEmpty()) {
-                logger.info("No absent files found.");
-                logger.info("Migration successfully finished!");
-                break;
-            } else {
-                logger.info("Found some absent files: " + absentFiles.size());
-                invokeThreads(absentFiles);
-            }
+        if (transmitFileList.isEmpty()) {
+            logger.info("No files to transmit. Exiting...");
+            return;
         }
+        invokeThreads(transmitFileList, WorkerMode.TRANSMIT);
+        logger.info("Finished main task.");
+        logger.info("Now, cleaning files from the old storage...");
+        invokeThreads(new LinkedBlockingQueue<>(deleteFileList), WorkerMode.CLEAN);
+        logger.info("Finished cleaning.");
+        logger.info("Migration successfully finished!");
     }
 
-    private Queue<String> fetchUntilSucceed(String url) {
+    private Queue<String> fetchUntilSucceed() {
         List<String> fileNames;
         do {
-            fileNames = fetchStorageFileList(url);
+            fileNames = fetchStorageFileList();
             if (fileNames == null) {
                 logger.info("Could not fetch filenames. Retrying in " + (RETRY_COOLDOWN_MILLIS / 1000) + " seconds...");
                 try {
@@ -83,23 +77,23 @@ public class CoordinatorImpl implements Coordinator {
         } while (fileNames == null);
         logger.info("File list fetch complete. " + fileNames.size() + " files.");
 
-        return new ConcurrentLinkedQueue<>(fileNames);
+        return new LinkedBlockingQueue<>(fileNames);
     }
 
 
     @Override
     public CoordinatorImpl init() {
-        files = fetchUntilSucceed(URL_OLD_STORAGE);
-        backupList = new LinkedList<>(files);
+        transmitFileList = fetchUntilSucceed();
+        deleteFileList = new LinkedBlockingQueue<>(transmitFileList);
 
         initDone = true;
         logger.info("Init complete.");
         return this;
     }
 
-    private List<String> fetchStorageFileList(String url) {
+    private List<String> fetchStorageFileList() {
         try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
-            HttpGet fileListFetchRequest = new HttpGet(url);
+            HttpGet fileListFetchRequest = new HttpGet(URL_OLD_STORAGE);
             CloseableHttpResponse response = httpClient.execute(fileListFetchRequest);
             int statusCode = response.getStatusLine().getStatusCode();
 
