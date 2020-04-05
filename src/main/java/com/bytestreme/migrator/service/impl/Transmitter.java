@@ -16,6 +16,9 @@ import java.util.Queue;
 
 import static com.bytestreme.migrator.Constants.*;
 
+/**
+ * Thread that will perform DELETE to the old storage
+ */
 public class Transmitter implements Worker {
 
     private final static Logger logger = Logger.getLogger(Transmitter.class);
@@ -26,6 +29,11 @@ public class Transmitter implements Worker {
         this.fileNames = fileNames;
     }
 
+    /**
+     * @param fileName name of file to download from old storage and upload to new storage
+     * @return status code
+     * @throws IOException in case of network or other IO errors
+     */
     private int transmitFile(String fileName) throws IOException {
         CloseableHttpClient httpClient = HttpClients.createMinimal();
         HttpGet oldStorageRequest = new HttpGet(URL_OLD_STORAGE + fileName);
@@ -41,6 +49,9 @@ public class Transmitter implements Worker {
         return newStorageResponse.getStatusLine().getStatusCode();
     }
 
+    /**
+     * @param current file being processed
+     */
     private void runTransmitter(String current) {
         int code;
         try {
@@ -67,6 +78,9 @@ public class Transmitter implements Worker {
         }
     }
 
+    /**
+     * Execute until all files are transmitted
+     */
     @Override
     public void run() {
         while (!fileNames.isEmpty()) {

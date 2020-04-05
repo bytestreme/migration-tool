@@ -7,7 +7,7 @@ public class Constants {
 
     public final static String FORM_DATA_FIELD = "file";
 
-    public final static Long RETRY_COOLDOWN_MILLIS = 5000L;
+    public final static Long INITIAL_FETCH_RETRY_TIMEOUT = 5000L;
 
     public final static int DEFAULT_WORKERS_NUM = 10;
 }

@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static com.bytestreme.migrator.Constants.RETRY_COOLDOWN_MILLIS;
+import static com.bytestreme.migrator.Constants.INITIAL_FETCH_RETRY_TIMEOUT;
 import static com.bytestreme.migrator.Constants.URL_OLD_STORAGE;
 
 public class CoordinatorImpl implements Coordinator {
@@ -35,6 +35,11 @@ public class CoordinatorImpl implements Coordinator {
         if (config.getWorkersNumber() < 1) throw new IllegalArgumentException("There should be at least one worker!");
     }
 
+    /**
+     * @param fileList to process
+     * @param mode in case of WorkerMode.TRANSMIT will transmit the fileList
+     *             in case of WorkerMode.CLEAN will delete the fileList from old storage
+     */
     private void invokeThreads(Queue<String> fileList, WorkerMode mode) {
         final ExecutorService executorService = Executors.newFixedThreadPool(config.getWorkersNumber());
 
@@ -62,14 +67,18 @@ public class CoordinatorImpl implements Coordinator {
         logger.info("Migration successfully finished!");
     }
 
+    /**
+     * runs fetchStorageFileList() until server returns 200 http status code
+     * @return files list to process
+     */
     private Queue<String> fetchUntilSucceed() {
         List<String> fileNames;
         do {
             fileNames = fetchStorageFileList();
             if (fileNames == null) {
-                logger.info("Could not fetch filenames. Retrying in " + (RETRY_COOLDOWN_MILLIS / 1000) + " seconds...");
+                logger.info("Could not fetch filenames. Retrying in " + (INITIAL_FETCH_RETRY_TIMEOUT / 1000) + " seconds...");
                 try {
-                    Thread.sleep(RETRY_COOLDOWN_MILLIS);
+                    Thread.sleep(INITIAL_FETCH_RETRY_TIMEOUT);
                 } catch (InterruptedException e) {
                     logger.error("Interrupted");
                 }
@@ -91,6 +100,10 @@ public class CoordinatorImpl implements Coordinator {
         return this;
     }
 
+    /**
+     * @return list of files to process.
+     * In case of client or server errors, return null that is handled by calling method
+     */
     private List<String> fetchStorageFileList() {
         try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
             HttpGet fileListFetchRequest = new HttpGet(URL_OLD_STORAGE);

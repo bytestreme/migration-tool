@@ -14,6 +14,11 @@ public class MigrationConfig {
         this.workersNumber = getNumberOfWorkers(args);
     }
 
+    /**
+     *
+     * @param args arguments of jar
+     * @return parsed number of threads
+     */
     private static int getNumberOfWorkers(String[] args) {
         int number = DEFAULT_WORKERS_NUM;
 

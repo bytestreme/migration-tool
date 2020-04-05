@@ -11,6 +11,9 @@ import java.util.Queue;
 
 import static com.bytestreme.migrator.Constants.URL_OLD_STORAGE;
 
+/**
+ * Thread that will perform DELETE to the old storage
+ */
 public class Cleaner implements Worker {
 
     private final static Logger logger = Logger.getLogger(Cleaner.class);
@@ -21,12 +24,20 @@ public class Cleaner implements Worker {
         this.fileNames = fileNames;
     }
 
+    /**
+     * @param fileName to delete from old storage
+     * @return status code
+     * @throws IOException in case of network or other IO errors
+     */
     private int cleanFromOldStorage(String fileName) throws IOException {
         CloseableHttpClient httpClient = HttpClients.createMinimal();
         HttpDelete oldStorageRequest = new HttpDelete(URL_OLD_STORAGE + fileName);
         return httpClient.execute(oldStorageRequest).getStatusLine().getStatusCode();
     }
 
+    /**
+     * @param current file being processed
+     */
     private void runCleaner(String current) {
         int code;
         try {
@@ -53,6 +64,9 @@ public class Cleaner implements Worker {
         }
     }
 
+    /**
+     * Execute until all files are deleted
+     */
     @Override
     public void run() {
         while (!fileNames.isEmpty()) {
