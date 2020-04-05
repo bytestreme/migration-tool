@@ -1,6 +1,5 @@
 package com.bytestreme.migrator.struct;
 
-import lombok.Getter;
 import org.apache.log4j.Logger;
 
 import static com.bytestreme.migrator.Constants.DEFAULT_WORKERS_NUM;
@@ -9,7 +8,6 @@ public class MigrationConfig {
 
     private final static Logger logger = Logger.getLogger(MigrationConfig.class);
 
-    @Getter
     private int workersNumber;
 
     public MigrationConfig(String[] args) {
@@ -30,6 +28,10 @@ public class MigrationConfig {
             }
         }
         return number;
+    }
+
+    public int getWorkersNumber() {
+        return this.workersNumber;
     }
 
 }
